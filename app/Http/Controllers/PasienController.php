@@ -9,6 +9,9 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Password;
 use Illuminate\View\View;
 
 class PasienController extends Controller
@@ -77,11 +80,11 @@ class PasienController extends Controller
 
         $validated = $request->validate([
             'polyclinic_id' => ['required', 'exists:polyclinics,id'],
-            'complaint'     => ['required', 'string', 'max:1000'],
+            'complaint' => ['required', 'string', 'max:1000'],
         ], [
             'polyclinic_id.required' => 'Silakan pilih salah satu poliklinik.',
-            'polyclinic_id.exists'   => 'Poliklinik yang dipilih tidak valid.',
-            'complaint.required'     => 'Keluhan utama wajib diisi agar tenaga medis dapat mempersiapkan penanganan.',
+            'polyclinic_id.exists' => 'Poliklinik yang dipilih tidak valid.',
+            'complaint.required' => 'Keluhan utama wajib diisi agar tenaga medis dapat mempersiapkan penanganan.',
         ]);
 
         $polyclinic = Polyclinic::findOrFail($validated['polyclinic_id']);
@@ -97,13 +100,13 @@ class PasienController extends Controller
         $queueCode = sprintf('%s-%03d', $polyclinic->code, $nextNumber);
 
         $queue = Queue::create([
-            'queue_code'    => $queueCode,
-            'queue_number'  => $nextNumber,
-            'queue_date'    => $today,
-            'patient_id'    => $user->id,
+            'queue_code' => $queueCode,
+            'queue_number' => $nextNumber,
+            'queue_date' => $today,
+            'patient_id' => $user->id,
             'polyclinic_id' => $polyclinic->id,
-            'status'        => Queue::STATUS_MENUNGGU_SUSTER,
-            'complaint'     => $validated['complaint'],
+            'status' => Queue::STATUS_MENUNGGU_SUSTER,
+            'complaint' => $validated['complaint'],
         ]);
 
         return redirect()->route('pasien.dashboard')
@@ -151,18 +154,18 @@ class PasienController extends Controller
             ->count();
 
         return response()->json([
-            'id'                => $queue->id,
-            'queue_code'        => $queue->queue_code,
-            'status'            => $queue->status,
-            'status_label'      => $queue->status_label,
-            'status_step'       => $queue->status_step,
-            'status_badge'      => $queue->status_badge_class,
-            'instruction'       => $queue->instruction,
-            'polyclinic_name'   => $queue->polyclinic->name,
-            'floor_room'        => $queue->polyclinic->floor_room,
-            'doctor_name'       => $queue->doctor?->name,
-            'waiting_ahead'     => $waitingCountAhead,
-            'is_finished'       => $queue->status === Queue::STATUS_SELESAI,
+            'id' => $queue->id,
+            'queue_code' => $queue->queue_code,
+            'status' => $queue->status,
+            'status_label' => $queue->status_label,
+            'status_step' => $queue->status_step,
+            'status_badge' => $queue->status_badge_class,
+            'instruction' => $queue->instruction,
+            'polyclinic_name' => $queue->polyclinic->name,
+            'floor_room' => $queue->polyclinic->floor_room,
+            'doctor_name' => $queue->doctor?->name,
+            'waiting_ahead' => $waitingCountAhead,
+            'is_finished' => $queue->status === Queue::STATUS_SELESAI,
         ]);
     }
 
@@ -181,8 +184,8 @@ class PasienController extends Controller
         if ($search = $request->input('search')) {
             $query->where(function ($q) use ($search) {
                 $q->where('disease', 'like', "%{$search}%")
-                  ->orWhere('diagnosis', 'like', "%{$search}%")
-                  ->orWhere('queue_code', 'like', "%{$search}%");
+                    ->orWhere('diagnosis', 'like', "%{$search}%")
+                    ->orWhere('queue_code', 'like', "%{$search}%");
             });
         }
 
@@ -215,5 +218,97 @@ class PasienController extends Controller
         $queue->load(['polyclinic', 'doctor']);
 
         return view('pasien.medical_record_detail', compact('queue'));
+    }
+
+    /**
+     * Halaman Profil Pasien & Pengaturan Akun
+     */
+    public function profile(): View
+    {
+        $user = Auth::user();
+
+        $totalVisits = Queue::where('patient_id', $user->id)->count();
+        $completedVisits = Queue::where('patient_id', $user->id)
+            ->where('status', Queue::STATUS_SELESAI)
+            ->count();
+        $latestVisit = Queue::where('patient_id', $user->id)
+            ->where('status', Queue::STATUS_SELESAI)
+            ->orderByDesc('completed_at')
+            ->first();
+
+        return view('pasien.profile', compact(
+            'user',
+            'totalVisits',
+            'completedVisits',
+            'latestVisit'
+        ));
+    }
+
+    /**
+     * Update Data Profil Pasien (Nama, Email, NIK, No. HP, Tgl Lahir, Gender, Alamat)
+     */
+    public function updateProfile(Request $request): RedirectResponse
+    {
+        $user = Auth::user();
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'string', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
+            'phone' => ['nullable', 'string', 'max:20'],
+            'nik' => ['nullable', 'string', 'digits_between:16,16', Rule::unique('users', 'nik')->ignore($user->id)],
+            'birth_date' => ['nullable', 'date', 'before_or_equal:today'],
+            'gender' => ['nullable', 'in:L,P'],
+            'address' => ['nullable', 'string', 'max:500'],
+        ], [
+            'name.required' => 'Nama lengkap wajib diisi.',
+            'email.required' => 'Alamat email wajib diisi.',
+            'email.email' => 'Format alamat email tidak valid.',
+            'email.unique' => 'Alamat email ini sudah digunakan oleh akun lain.',
+            'nik.digits_between' => 'NIK harus berupa 16 digit angka sesuai KTP.',
+            'nik.unique' => 'NIK ini sudah terdaftar pada akun pasien lain.',
+            'birth_date.date' => 'Format tanggal lahir tidak valid.',
+            'birth_date.before_or_equal' => 'Tanggal lahir tidak boleh melebihi hari ini.',
+            'gender.in' => 'Pilihan jenis kelamin tidak valid.',
+            'address.max' => 'Alamat domisili maksimal 500 karakter.',
+        ]);
+
+        $user->update([
+            'name' => $validated['name'],
+            'email' => $validated['email'],
+            'phone' => $validated['phone'] ?? null,
+            'nik' => $validated['nik'] ?? null,
+            'birth_date' => $validated['birth_date'] ?? null,
+            'gender' => $validated['gender'] ?? null,
+            'address' => $validated['address'] ?? null,
+        ]);
+
+        return redirect()->route('pasien.profile')
+            ->with('success', 'Data profil Anda berhasil diperbarui!');
+    }
+
+    /**
+     * Ganti Kata Sandi Pasien
+     */
+    public function updatePassword(Request $request): RedirectResponse
+    {
+        $user = Auth::user();
+
+        $validated = $request->validate([
+            'current_password' => ['required', 'current_password'],
+            'password' => ['required', 'confirmed', Password::min(6)],
+        ], [
+            'current_password.required' => 'Kata sandi saat ini wajib diisi.',
+            'current_password.current_password' => 'Kata sandi saat ini tidak cocok dengan akun Anda.',
+            'password.required' => 'Kata sandi baru wajib diisi.',
+            'password.min' => 'Kata sandi baru minimal 6 karakter.',
+            'password.confirmed' => 'Konfirmasi kata sandi baru tidak cocok.',
+        ]);
+
+        $user->update([
+            'password' => Hash::make($validated['password']),
+        ]);
+
+        return redirect()->route('pasien.profile')
+            ->with('success', 'Kata sandi berhasil diperbarui! Gunakan kata sandi baru ini pada login berikutnya.');
     }
 }

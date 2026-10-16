@@ -26,11 +26,53 @@
                 </div>
 
                 <div class="flex flex-wrap items-center gap-3">
+                    <a href="{{ route('pasien.profile') }}" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-semibold text-xs border border-white/20 backdrop-blur transition-all">
+                        <i data-lucide="user-cog" class="w-4 h-4"></i>
+                        Edit Profil & Sandi
+                    </a>
                     <a href="{{ route('pasien.riwayat-medis') }}" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-semibold text-xs border border-white/20 backdrop-blur transition-all">
                         <i data-lucide="file-heart" class="w-4 h-4"></i>
                         Lihat Riwayat Medis
                     </a>
                 </div>
+            </div>
+        </div>
+
+        <!-- KARTU DATA DIRI PASIEN SINGKAT -->
+        <div class="bg-white rounded-3xl border border-slate-200/80 shadow-sm p-5 sm:p-6 mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6">
+            <div class="flex items-center gap-4">
+                <div class="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-tr from-unpam-700 via-unpam-600 to-teal-400 text-white flex items-center justify-center text-lg font-black shadow-md shadow-unpam-600/20 shrink-0">
+                    {{ strtoupper(substr($user->name, 0, 2)) }}
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <h2 class="text-sm sm:text-base font-bold text-slate-900">{{ $user->name }}</h2>
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-100 text-emerald-800">
+                            Pasien Terdaftar
+                        </span>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-xs text-slate-500">
+                        <span class="flex items-center gap-1 font-mono">
+                            <i data-lucide="id-card" class="w-3.5 h-3.5 text-slate-400"></i>
+                            NIK: {{ $user->nik ?? 'Belum diisi' }}
+                        </span>
+                        <span class="flex items-center gap-1">
+                            <i data-lucide="phone" class="w-3.5 h-3.5 text-slate-400"></i>
+                            {{ $user->phone ?? 'Belum ada telepon' }}
+                        </span>
+                        <span class="flex items-center gap-1">
+                            <i data-lucide="mail" class="w-3.5 h-3.5 text-slate-400"></i>
+                            {{ $user->email }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="shrink-0">
+                <a href="{{ route('pasien.profile') }}" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold text-unpam-700 bg-unpam-50 hover:bg-unpam-100 border border-unpam-200 transition-colors">
+                    <i data-lucide="user-pen" class="w-3.5 h-3.5"></i>
+                    Ubah Profil & Sandi
+                </a>
             </div>
         </div>
 

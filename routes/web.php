@@ -20,19 +20,23 @@ Route::get('/', function () {
     if (Auth::check()) {
         return redirect()->route(Auth::user()->getDashboardRoute());
     }
+
     return redirect()->route('login');
 })->name('home');
 
 Route::get('/monitor', [QueueDisplayController::class, 'index'])->name('queue.monitor');
 Route::get('/monitor/live', [QueueDisplayController::class, 'liveData'])->name('queue.monitor.live');
 
-// Autentikasi: Satu Pintu Login Tunggal & Registrasi Pasien
+// Autentikasi: Satu Pintu Login Tunggal, Registrasi Pasien & Lupa Password NIK
 Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthController::class, 'showLoginForm'])->name('login');
     Route::post('/login', [AuthController::class, 'login']);
 
     Route::get('/register', [AuthController::class, 'showRegisterForm'])->name('register');
     Route::post('/register', [AuthController::class, 'register']);
+
+    Route::get('/lupa-password', [AuthController::class, 'showForgotPasswordForm'])->name('password.request');
+    Route::post('/lupa-password', [AuthController::class, 'resetPasswordWithNik'])->name('password.update-nik');
 });
 
 // Logout & Pengarah Cepat
@@ -56,6 +60,11 @@ Route::middleware('auth')->group(function () {
         Route::get('/antrian/status/{queue}', [PasienController::class, 'getQueueStatus'])->name('antrian.status');
         Route::get('/riwayat-medis', [PasienController::class, 'medicalRecords'])->name('riwayat-medis');
         Route::get('/riwayat-medis/{queue}', [PasienController::class, 'showMedicalRecord'])->name('riwayat-medis.show');
+
+        // Pengaturan Profil & Ganti Kata Sandi Pasien
+        Route::get('/profil', [PasienController::class, 'profile'])->name('profile');
+        Route::put('/profil', [PasienController::class, 'updateProfile'])->name('profile.update');
+        Route::put('/profil/password', [PasienController::class, 'updatePassword'])->name('password.update');
     });
 
     /*

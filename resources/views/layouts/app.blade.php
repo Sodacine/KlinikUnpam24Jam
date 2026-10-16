@@ -159,6 +159,10 @@
                                 <i data-lucide="file-heart" class="w-4 h-4"></i>
                                 Riwayat Medis
                             </a>
+                            <a href="{{ route('pasien.profile') }}" class="flex items-center gap-2 text-sm font-semibold {{ request()->routeIs('pasien.profile*') ? 'text-unpam-700 bg-unpam-50 px-3 py-1.5 rounded-lg' : 'text-slate-600 hover:text-unpam-600' }}">
+                                <i data-lucide="user-cog" class="w-4 h-4"></i>
+                                Profil & Sandi
+                            </a>
                         @elseif(auth()->user()->isSuster())
                             <a href="{{ route('suster.dashboard') }}" class="flex items-center gap-2 text-sm font-semibold {{ request()->routeIs('suster.dashboard') ? 'text-unpam-700 bg-unpam-50 px-3 py-1.5 rounded-lg' : 'text-slate-600 hover:text-unpam-600' }}">
                                 <i data-lucide="activity" class="w-4 h-4"></i>
@@ -200,30 +204,46 @@
                 <div class="flex items-center gap-3">
                     @auth
                         <div class="flex items-center gap-3">
-                            <div class="text-right hidden sm:block">
-                                <div class="text-sm font-bold text-slate-800 leading-tight">
-                                    {{ auth()->user()->name }}
-                                </div>
-                                <div class="flex items-center justify-end gap-1.5 mt-0.5">
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold
-                                        @if(auth()->user()->isPasien()) bg-emerald-100 text-emerald-800
-                                        @elseif(auth()->user()->isSuster()) bg-sky-100 text-sky-800
-                                        @elseif(auth()->user()->isDokter()) bg-indigo-100 text-indigo-800
-                                        @elseif(auth()->user()->isApoteker()) bg-amber-100 text-amber-800
-                                        @endif">
-                                        {{ auth()->user()->role_label }}
-                                    </span>
-                                    @if(auth()->user()->isDokter() && auth()->user()->polyclinic)
-                                        <span class="text-[11px] text-slate-500 font-medium">({{ auth()->user()->polyclinic->name }})</span>
-                                    @endif
-                                    @if(in_array(auth()->user()->role, ['suster', 'dokter', 'apoteker']) && request()->routeIs(['suster.dashboard', 'dokter.dashboard', 'apoteker.dashboard']))
-                                        <span class="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200" title="Live Auto-Sync Aktif">
-                                            <span id="syncIndicatorPulse" class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                                            Auto-Sync Live
+                            @if(auth()->user()->isPasien())
+                                <a href="{{ route('pasien.profile') }}" title="Lihat & Edit Profil" class="text-right hidden sm:block group">
+                                    <div class="text-sm font-bold text-slate-800 leading-tight group-hover:text-unpam-700 transition-colors flex items-center justify-end gap-1">
+                                        {{ auth()->user()->name }}
+                                        <i data-lucide="chevron-right" class="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity text-unpam-600"></i>
+                                    </div>
+                                    <div class="flex items-center justify-end gap-1.5 mt-0.5">
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-100 text-emerald-800">
+                                            {{ auth()->user()->role_label }}
                                         </span>
-                                    @endif
+                                    </div>
+                                </a>
+                                <a href="{{ route('pasien.profile') }}" title="Pengaturan Profil & Sandi" class="p-2 rounded-xl text-slate-500 hover:text-unpam-700 hover:bg-unpam-50 border border-slate-200 hover:border-unpam-200 transition-colors {{ request()->routeIs('pasien.profile*') ? 'bg-unpam-50 text-unpam-700 border-unpam-200' : '' }}">
+                                    <i data-lucide="user-cog" class="w-4 h-4"></i>
+                                </a>
+                            @else
+                                <div class="text-right hidden sm:block">
+                                    <div class="text-sm font-bold text-slate-800 leading-tight">
+                                        {{ auth()->user()->name }}
+                                    </div>
+                                    <div class="flex items-center justify-end gap-1.5 mt-0.5">
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold
+                                            @if(auth()->user()->isSuster()) bg-sky-100 text-sky-800
+                                            @elseif(auth()->user()->isDokter()) bg-indigo-100 text-indigo-800
+                                            @elseif(auth()->user()->isApoteker()) bg-amber-100 text-amber-800
+                                            @endif">
+                                            {{ auth()->user()->role_label }}
+                                        </span>
+                                        @if(auth()->user()->isDokter() && auth()->user()->polyclinic)
+                                            <span class="text-[11px] text-slate-500 font-medium">({{ auth()->user()->polyclinic->name }})</span>
+                                        @endif
+                                        @if(in_array(auth()->user()->role, ['suster', 'dokter', 'apoteker']) && request()->routeIs(['suster.dashboard', 'dokter.dashboard', 'apoteker.dashboard']))
+                                            <span class="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200" title="Live Auto-Sync Aktif">
+                                                <span id="syncIndicatorPulse" class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                                Auto-Sync Live
+                                            </span>
+                                        @endif
+                                    </div>
                                 </div>
-                            </div>
+                            @endif
 
                             <form action="{{ route('logout') }}" method="POST" class="inline">
                                 @csrf
@@ -257,6 +277,10 @@
                 <a href="{{ route('pasien.riwayat-medis') }}" class="flex flex-col items-center py-1 {{ request()->routeIs('pasien.riwayat-medis*') ? 'text-unpam-700 font-bold' : 'text-slate-600' }}">
                     <i data-lucide="file-heart" class="w-4 h-4 mb-0.5"></i>
                     Riwayat
+                </a>
+                <a href="{{ route('pasien.profile') }}" class="flex flex-col items-center py-1 {{ request()->routeIs('pasien.profile*') ? 'text-unpam-700 font-bold' : 'text-slate-600' }}">
+                    <i data-lucide="user-cog" class="w-4 h-4 mb-0.5"></i>
+                    Profil
                 </a>
             @elseif(auth()->user()->isSuster())
                 <a href="{{ route('suster.dashboard') }}" class="flex flex-col items-center py-1 {{ request()->routeIs('suster.dashboard') ? 'text-unpam-700 font-bold' : 'text-slate-600' }}">

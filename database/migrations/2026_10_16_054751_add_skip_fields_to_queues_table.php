@@ -22,16 +22,18 @@ return new class extends Migration
             $table->timestamp('expired_at')->nullable()->after('skip_count');
         });
 
-        // Modifikasi enum status untuk menambah nilai 'dilewati'
-        DB::statement("ALTER TABLE queues MODIFY COLUMN status ENUM(
-            'menunggu_suster',
-            'menunggu_dokter',
-            'pemeriksaan_dokter',
-            'menunggu_apotek',
-            'siap_diambil',
-            'selesai',
-            'dilewati'
-        ) NOT NULL DEFAULT 'menunggu_suster'");
+        // Modifikasi enum status untuk menambah nilai 'dilewati' (khusus MySQL/MariaDB)
+        if (DB::getDriverName() === 'mysql') {
+            DB::statement("ALTER TABLE queues MODIFY COLUMN status ENUM(
+                'menunggu_suster',
+                'menunggu_dokter',
+                'pemeriksaan_dokter',
+                'menunggu_apotek',
+                'siap_diambil',
+                'selesai',
+                'dilewati'
+            ) NOT NULL DEFAULT 'menunggu_suster'");
+        }
     }
 
     /**
@@ -40,14 +42,16 @@ return new class extends Migration
     public function down(): void
     {
         // Kembalikan enum tanpa 'dilewati'
-        DB::statement("ALTER TABLE queues MODIFY COLUMN status ENUM(
-            'menunggu_suster',
-            'menunggu_dokter',
-            'pemeriksaan_dokter',
-            'menunggu_apotek',
-            'siap_diambil',
-            'selesai'
-        ) NOT NULL DEFAULT 'menunggu_suster'");
+        if (DB::getDriverName() === 'mysql') {
+            DB::statement("ALTER TABLE queues MODIFY COLUMN status ENUM(
+                'menunggu_suster',
+                'menunggu_dokter',
+                'pemeriksaan_dokter',
+                'menunggu_apotek',
+                'siap_diambil',
+                'selesai'
+            ) NOT NULL DEFAULT 'menunggu_suster'");
+        }
 
         Schema::table('queues', function (Blueprint $table) {
             $table->dropColumn(['skipped_at', 'skip_count', 'expired_at']);
