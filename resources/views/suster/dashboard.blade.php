@@ -229,7 +229,16 @@
                                             @if($q->status === \App\Models\Queue::STATUS_MENUNGGU_SUSTER)
                                                 {{-- === MENUNGGU SUSTER: Tombol Verifikasi + Skip --}}
                                                 <!-- Tombol Pindah Poli oleh Suster -->
-                                                <button type="button" onclick="openSusterTransferModal('{{ $q->id }}', '{{ $q->queue_code }}', '{{ $q->patient->name }}', '{{ $q->polyclinic_id }}', '{{ $q->polyclinic->name }}')" title="Pindahkan Pasien ke Poli Lain" class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 transition-all">
+                                                <button type="button" 
+                                                    onclick="openSusterTransferModal(this)" 
+                                                    data-action="{{ route('suster.antrian.pindah-poli', $q) }}"
+                                                    data-queue-id="{{ $q->id }}"
+                                                    data-queue-code="{{ $q->queue_code }}"
+                                                    data-patient-name="{{ $q->patient->name }}"
+                                                    data-source-poli-id="{{ $q->polyclinic_id }}"
+                                                    data-source-poli-name="{{ $q->polyclinic->name }}"
+                                                    title="Pindahkan Pasien ke Poli Lain" 
+                                                    class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 transition-all">
                                                     <i data-lucide="arrow-right-left" class="w-3.5 h-3.5"></i>
                                                     Pindah Poli
                                                 </button>
@@ -404,19 +413,32 @@
 </div>
 
 <script>
-    function openSusterTransferModal(queueId, queueCode, patientName, sourcePoliId, sourcePoliName) {
+    function openSusterTransferModal(elOrId, queueCode, patientName, sourcePoliId, sourcePoliName) {
         const form = document.getElementById('susterTransferPoliForm');
-        form.action = `/suster/antrian/${queueId}/pindah-poli`;
+        let code = queueCode;
+        let name = patientName;
+        let sId = sourcePoliId;
+        let sName = sourcePoliName;
 
-        document.getElementById('susterTransferQueueCode').innerText = queueCode;
-        document.getElementById('susterTransferPatientName').innerText = patientName;
-        document.getElementById('susterTransferSourcePoli').innerText = sourcePoliName;
+        if (typeof elOrId === 'object' && elOrId !== null && elOrId.dataset) {
+            form.action = elOrId.dataset.action || `/suster/antrian/${elOrId.dataset.queueId}/pindah-poli`;
+            code = elOrId.dataset.queueCode;
+            name = elOrId.dataset.patientName;
+            sId = elOrId.dataset.sourcePoliId;
+            sName = elOrId.dataset.sourcePoliName;
+        } else {
+            form.action = `/suster/antrian/${elOrId}/pindah-poli`;
+        }
+
+        document.getElementById('susterTransferQueueCode').innerText = code || '';
+        document.getElementById('susterTransferPatientName').innerText = name || '';
+        document.getElementById('susterTransferSourcePoli').innerText = sName || '';
 
         const select = document.getElementById('suster_target_polyclinic_id');
         select.value = '';
         for (let i = 0; i < select.options.length; i++) {
             const opt = select.options[i];
-            if (opt.value === sourcePoliId) {
+            if (opt.value == sId) {
                 opt.disabled = true;
                 opt.innerText = opt.innerText.replace(' (Poli Saat Ini)', '') + ' (Poli Saat Ini)';
             } else {

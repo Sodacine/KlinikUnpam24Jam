@@ -12,19 +12,18 @@ class RoleMiddleware
     /**
      * Handle an incoming request.
      *
-     * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
-     * @param  string  ...$roles
+     * @param  Closure(Request): (Response)  $next
      */
     public function handle(Request $request, Closure $next, string ...$roles): Response
     {
-        if (!Auth::check()) {
+        if (! Auth::check()) {
             return redirect()->route('login')->with('error', 'Silakan masuk terlebih dahulu.');
         }
 
         $user = Auth::user();
 
         // Cek apakah role pengguna ada di daftar role yang diizinkan
-        if (!in_array($user->role, $roles, true)) {
+        if (! in_array($user->role, $roles, true)) {
             // Arahkan otomatis ke dashboard pengguna masing-masing jika salah masuk
             return redirect()->route($user->getDashboardRoute())
                 ->with('error', 'Akses Ditolak: Anda tidak memiliki wewenang untuk membuka halaman tersebut.');

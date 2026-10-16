@@ -26,7 +26,7 @@ class QueueSeeder extends Seeder
         $poliGigi = Polyclinic::where('code', 'GGI')->first();
         $poliAnak = Polyclinic::where('code', 'ANK')->first();
 
-        if (!$pasien1 || !$drUmum || !$poliUmum) {
+        if (! $pasien1 || ! $drUmum || ! $poliUmum) {
             return;
         }
 

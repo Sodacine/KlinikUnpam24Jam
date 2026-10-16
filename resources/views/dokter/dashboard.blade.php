@@ -143,7 +143,15 @@
                             </div>
 
                             <div class="flex md:flex-col items-end justify-between gap-2 shrink-0">
-                                <button type="button" onclick="openResubmitModal('{{ $req->id }}', '{{ $req->queue_code }}', '{{ $req->patient->name }}', '{{ addslashes($req->prescription_replacement_reason) }}', '{{ addslashes($req->prescription) }}')" class="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 shadow-md shadow-amber-600/20 transition-all active:scale-95">
+                                <button type="button" 
+                                    onclick="openResubmitModal(this)"
+                                    data-action="{{ route('dokter.antrian.resepkan-ulang', $req) }}"
+                                    data-queue-id="{{ $req->id }}"
+                                    data-queue-code="{{ $req->queue_code }}"
+                                    data-patient-name="{{ $req->patient->name }}"
+                                    data-apoteker-reason="{{ $req->prescription_replacement_reason }}"
+                                    data-prescription="{{ $req->prescription }}"
+                                    class="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 shadow-md shadow-amber-600/20 transition-all active:scale-95">
                                     <i data-lucide="edit-3" class="w-4 h-4"></i>
                                     Resepkan Ulang Obat &raquo;
                                 </button>
@@ -224,7 +232,16 @@
                                             </button>
 
                                             <!-- Tombol Pindah Poli -->
-                                            <button type="button" onclick="openTransferModal('{{ $wp->id }}', '{{ $wp->queue_code }}', '{{ $wp->patient->name }}', '{{ $wp->polyclinic_id }}', '{{ $wp->polyclinic->name }}')" title="Pindahkan Pasien ke Poli Lain" class="inline-flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 transition-all">
+                                            <button type="button" 
+                                                onclick="openTransferModal(this)" 
+                                                data-action="{{ route('dokter.antrian.pindah-poli', $wp) }}"
+                                                data-queue-id="{{ $wp->id }}"
+                                                data-queue-code="{{ $wp->queue_code }}"
+                                                data-patient-name="{{ $wp->patient->name }}"
+                                                data-source-poli-id="{{ $wp->polyclinic_id }}"
+                                                data-source-poli-name="{{ $wp->polyclinic->name }}"
+                                                title="Pindahkan Pasien ke Poli Lain" 
+                                                class="inline-flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 transition-all">
                                                 <i data-lucide="arrow-right-left" class="w-3.5 h-3.5"></i>
                                                 Pindah Poli
                                             </button>
@@ -497,7 +514,7 @@
 <!-- ========================================== -->
 <!-- MODAL RESEPKAN ULANG OBAT (DOKTER)        -->
 <!-- ========================================== -->
-<div id="modalResepkanUlang" class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 hidden">
+<div id="modalResepkanUlang" class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 hidden" onclick="if(event.target === this) closeResubmitModal()">
     <div class="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-7 shadow-2xl border border-slate-100 my-8">
         
         <div class="flex items-center justify-between pb-4 border-b border-slate-100 mb-5">
@@ -574,20 +591,33 @@
 </div>
 
 <script>
-    function openTransferModal(queueId, queueCode, patientName, sourcePoliId, sourcePoliName) {
+    function openTransferModal(elOrId, queueCode, patientName, sourcePoliId, sourcePoliName) {
         const form = document.getElementById('transferPoliForm');
-        form.action = `/dokter/antrian/${queueId}/pindah-poli`;
+        let code = queueCode;
+        let name = patientName;
+        let sId = sourcePoliId;
+        let sName = sourcePoliName;
 
-        document.getElementById('transferQueueCode').innerText = queueCode;
-        document.getElementById('transferPatientName').innerText = patientName;
-        document.getElementById('transferSourcePoli').innerText = sourcePoliName;
+        if (typeof elOrId === 'object' && elOrId !== null && elOrId.dataset) {
+            form.action = elOrId.dataset.action || `/dokter/antrian/${elOrId.dataset.queueId}/pindah-poli`;
+            code = elOrId.dataset.queueCode;
+            name = elOrId.dataset.patientName;
+            sId = elOrId.dataset.sourcePoliId;
+            sName = elOrId.dataset.sourcePoliName;
+        } else {
+            form.action = `/dokter/antrian/${elOrId}/pindah-poli`;
+        }
+
+        document.getElementById('transferQueueCode').innerText = code;
+        document.getElementById('transferPatientName').innerText = name;
+        document.getElementById('transferSourcePoli').innerText = sName;
 
         // Nonaktifkan opsi poli saat ini pada dropdown
         const select = document.getElementById('target_polyclinic_id');
         select.value = '';
         for (let i = 0; i < select.options.length; i++) {
             const opt = select.options[i];
-            if (opt.value === sourcePoliId) {
+            if (opt.value == sId) {
                 opt.disabled = true;
                 opt.innerText = opt.innerText.replace(' (Poli Saat Ini)', '') + ' (Poli Saat Ini)';
             } else {
@@ -603,15 +633,28 @@
         document.getElementById('modalPindahPoli').classList.add('hidden');
     }
 
-    function openResubmitModal(queueId, queueCode, patientName, apotekerReason, oldPrescription) {
+    function openResubmitModal(elOrId, queueCode, patientName, apotekerReason, oldPrescription) {
         const form = document.getElementById('resubmitPrescriptionForm');
-        form.action = `/dokter/antrian/${queueId}/resepkan-ulang`;
+        let code = queueCode;
+        let name = patientName;
+        let reason = apotekerReason;
+        let prescription = oldPrescription;
 
-        document.getElementById('resubmitQueueCode').innerText = queueCode;
-        document.getElementById('resubmitPatientName').innerText = patientName;
-        document.getElementById('resubmitApotekerReason').innerText = apotekerReason;
-        document.getElementById('resubmitOldPrescription').innerText = oldPrescription;
-        document.getElementById('resubmitPrescriptionInput').value = oldPrescription;
+        if (typeof elOrId === 'object' && elOrId !== null && elOrId.dataset) {
+            form.action = elOrId.dataset.action || `/dokter/antrian/${elOrId.dataset.queueId}/resepkan-ulang`;
+            code = elOrId.dataset.queueCode;
+            name = elOrId.dataset.patientName;
+            reason = elOrId.dataset.apotekerReason;
+            prescription = elOrId.dataset.prescription;
+        } else {
+            form.action = `/dokter/antrian/${elOrId}/resepkan-ulang`;
+        }
+
+        document.getElementById('resubmitQueueCode').innerText = code || '';
+        document.getElementById('resubmitPatientName').innerText = name || '';
+        document.getElementById('resubmitApotekerReason').innerText = reason || '';
+        document.getElementById('resubmitOldPrescription').innerText = prescription || '';
+        document.getElementById('resubmitPrescriptionInput').value = prescription || '';
 
         document.getElementById('modalResepkanUlang').classList.remove('hidden');
     }

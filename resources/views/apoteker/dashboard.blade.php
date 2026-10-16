@@ -184,7 +184,15 @@
                                                 </button>
 
                                                 <!-- Tombol Ajukan Penggantian Obat -->
-                                                <button type="button" onclick="openReplacementModal('{{ $queue->id }}', '{{ $queue->queue_code }}', '{{ $queue->patient->name }}', '{{ addslashes($queue->prescription) }}')" class="inline-flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-bold text-amber-800 bg-amber-100/70 hover:bg-amber-200 border border-amber-300 transition-colors">
+                                                <button type="button" 
+                                                    onclick="openReplacementModal(this)"
+                                                    data-action="{{ route('apoteker.antrian.ajukan-penggantian-obat', $queue) }}"
+                                                    data-queue-id="{{ $queue->id }}"
+                                                    data-queue-code="{{ $queue->queue_code }}"
+                                                    data-patient-name="{{ $queue->patient->name }}"
+                                                    data-prescription="{{ $queue->prescription }}"
+                                                    data-reason="{{ $queue->prescription_replacement_reason ?? '' }}"
+                                                    class="inline-flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-bold text-amber-800 bg-amber-100/70 hover:bg-amber-200 border border-amber-300 transition-colors">
                                                     <i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-amber-700"></i>
                                                     {{ $queue->needs_prescription_revision ? 'Update Pengajuan Obat' : 'Ajukan Ganti Obat' }}
                                                 </button>
@@ -467,7 +475,7 @@
 <!-- ========================================== -->
 <!-- MODAL AJUKAN PENGGANTIAN RESEP OBAT       -->
 <!-- ========================================== -->
-<div id="modalPenggantianObat" class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 hidden">
+<div id="modalPenggantianObat" class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 hidden" onclick="if(event.target === this) closeReplacementModal()">
     <div class="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-7 shadow-2xl border border-slate-100 my-8">
         
         <div class="flex items-center justify-between pb-4 border-b border-slate-100 mb-5">
@@ -529,13 +537,31 @@
 </div>
 
 <script>
-    function openReplacementModal(queueId, queueCode, patientName, currentPrescription) {
+    function openReplacementModal(elOrId, queueCode, patientName, currentPrescription, reason = '') {
         const form = document.getElementById('replacementForm');
-        form.action = `/apoteker/antrian/${queueId}/ajukan-penggantian-obat`;
+        let code = queueCode;
+        let name = patientName;
+        let prescription = currentPrescription;
+        let existingReason = reason;
 
-        document.getElementById('replacementQueueCode').innerText = queueCode;
-        document.getElementById('replacementPatientName').innerText = patientName;
-        document.getElementById('replacementCurrentPrescription').innerText = currentPrescription;
+        if (typeof elOrId === 'object' && elOrId !== null && elOrId.dataset) {
+            form.action = elOrId.dataset.action || `/apoteker/antrian/${elOrId.dataset.queueId}/ajukan-penggantian-obat`;
+            code = elOrId.dataset.queueCode;
+            name = elOrId.dataset.patientName;
+            prescription = elOrId.dataset.prescription;
+            existingReason = elOrId.dataset.reason || '';
+        } else {
+            form.action = `/apoteker/antrian/${elOrId}/ajukan-penggantian-obat`;
+        }
+
+        document.getElementById('replacementQueueCode').innerText = code || '';
+        document.getElementById('replacementPatientName').innerText = name || '';
+        document.getElementById('replacementCurrentPrescription').innerText = prescription || '';
+
+        const reasonInput = document.getElementById('prescription_replacement_reason');
+        if (reasonInput) {
+            reasonInput.value = existingReason || '';
+        }
 
         document.getElementById('modalPenggantianObat').classList.remove('hidden');
     }
