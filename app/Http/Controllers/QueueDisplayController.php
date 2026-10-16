@@ -15,6 +15,9 @@ class QueueDisplayController extends Controller
      */
     public function index(): View
     {
+        // Bersihkan antrian yang sudah kadaluarsa (>24 jam)
+        Queue::autoExpireOutdatedQueues();
+
         $polyclinics = Polyclinic::where('is_active', true)->get();
         $today = Carbon::today();
 
@@ -34,7 +37,7 @@ class QueueDisplayController extends Controller
                 ->count();
 
             $activePerPoli[$poli->id] = [
-                'current'      => $current,
+                'current' => $current,
                 'totalWaiting' => $totalWaiting,
             ];
         }
@@ -54,6 +57,9 @@ class QueueDisplayController extends Controller
      */
     public function liveData(): JsonResponse
     {
+        // Bersihkan antrian yang sudah kadaluarsa (>24 jam)
+        Queue::autoExpireOutdatedQueues();
+
         $polyclinics = Polyclinic::where('is_active', true)->get();
         $today = Carbon::today();
 
@@ -72,12 +78,12 @@ class QueueDisplayController extends Controller
                 ->count();
 
             $data[] = [
-                'poli_id'      => $poli->id,
-                'poli_name'    => $poli->name,
+                'poli_id' => $poli->id,
+                'poli_name' => $poli->name,
                 'current_code' => $current?->queue_code ?? '-',
                 'status_label' => $current?->status_label ?? 'Menunggu Pasien',
-                'doctor_name'  => $current?->doctor?->name ?? 'Dokter Jaga',
-                'waiting_count'=> $totalWaiting,
+                'doctor_name' => $current?->doctor?->name ?? 'Dokter Jaga',
+                'waiting_count' => $totalWaiting,
             ];
         }
 
@@ -87,9 +93,9 @@ class QueueDisplayController extends Controller
             ->pluck('queue_code');
 
         return response()->json([
-            'polyclinics'    => $data,
+            'polyclinics' => $data,
             'pharmacy_ready' => $pharmacyReady,
-            'updated_at'     => Carbon::now()->format('H:i:s'),
+            'updated_at' => Carbon::now()->format('H:i:s'),
         ]);
     }
 }

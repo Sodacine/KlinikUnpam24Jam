@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Polyclinic;
 use App\Models\Queue;
+use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -17,12 +18,22 @@ class DokterController extends Controller
      */
     public function dashboard(): View
     {
+        // Bersihkan antrian yang sudah kadaluarsa (>24 jam)
+        Queue::autoExpireOutdatedQueues();
+
         $doctor = Auth::user();
         $today = Carbon::today();
 
         // Ambil antrian di poli dokter atau yang dialokasikan ke dokter ini
         $baseQuery = Queue::with(['patient', 'polyclinic'])
-            ->whereDate('queue_date', $today);
+            ->where(function ($query) use ($today) {
+                $query->whereDate('queue_date', $today)
+                    ->orWhere(function ($sub) {
+                        $sub->where('status', '!=', Queue::STATUS_SELESAI)
+                            ->whereNotNull('expired_at')
+                            ->where('expired_at', '>', now());
+                    });
+            });
 
         if ($doctor->polyclinic_id) {
             $baseQuery->where('polyclinic_id', $doctor->polyclinic_id);
@@ -49,6 +60,13 @@ class DokterController extends Controller
             ->latest('doctor_finished_at')
             ->get();
 
+        // Pasien yang dilewati dokter karena tidak kunjung hadir (bisa dipanggil ulang selama 24 jam)
+        $skippedPatients = (clone $baseQuery)
+            ->where('status', Queue::STATUS_DILEWATI)
+            ->whereNotNull('nurse_verified_at')
+            ->latest('skipped_at')
+            ->get();
+
         // Pasien yang diajukan penggantian resep obat oleh Apoteker (stok habis/revisi)
         $revisionRequests = (clone $baseQuery)
             ->where('doctor_id', $doctor->id)
@@ -66,6 +84,7 @@ class DokterController extends Controller
             'currentPatient',
             'revisionRequests',
             'handledToday',
+            'skippedPatients',
             'polyclinics'
         ));
     }
@@ -94,8 +113,8 @@ class DokterController extends Controller
         }
 
         $queue->update([
-            'status'            => Queue::STATUS_PEMERIKSAAN_DOKTER,
-            'doctor_id'         => $doctor->id,
+            'status' => Queue::STATUS_PEMERIKSAAN_DOKTER,
+            'doctor_id' => $doctor->id,
             'doctor_started_at' => Carbon::now(),
         ]);
 
@@ -113,7 +132,7 @@ class DokterController extends Controller
         // Pasien harus berstatus pemeriksaan_dokter
         if ($queue->status !== Queue::STATUS_PEMERIKSAAN_DOKTER) {
             return redirect()->route('dokter.dashboard')
-                ->with('error', "Pasien tidak dalam status pemeriksaan dokter.");
+                ->with('error', 'Pasien tidak dalam status pemeriksaan dokter.');
         }
 
         $queue->load(['patient', 'polyclinic']);
@@ -142,27 +161,28 @@ class DokterController extends Controller
 
         if ($queue->status !== Queue::STATUS_PEMERIKSAAN_DOKTER) {
             return redirect()->route('dokter.dashboard')
-                ->with('error', "Status antrian tidak valid untuk disubmit.");
+                ->with('error', 'Status antrian tidak valid untuk disubmit.');
         }
 
         $validated = $request->validate([
-            'disease'      => ['required', 'string', 'max:255'],
-            'diagnosis'    => ['required', 'string'],
+            'disease' => ['required', 'string', 'max:255'],
+            'diagnosis' => ['required', 'string'],
             'prescription' => ['required', 'string'],
             'doctor_notes' => ['nullable', 'string'],
         ], [
-            'disease.required'      => 'Nama penyakit / keluhan klinis wajib diisi.',
-            'diagnosis.required'    => 'Hasil diagnosa dokter wajib diisi.',
+            'disease.required' => 'Nama penyakit / keluhan klinis wajib diisi.',
+            'diagnosis.required' => 'Hasil diagnosa dokter wajib diisi.',
             'prescription.required' => 'Resep obat wajib diisi untuk diteruskan ke Apotek.',
         ]);
 
         $queue->update([
-            'disease'            => $validated['disease'],
-            'diagnosis'          => $validated['diagnosis'],
-            'prescription'       => $validated['prescription'],
-            'doctor_notes'       => $validated['doctor_notes'] ?? null,
-            'status'             => Queue::STATUS_MENUNGGU_APOTEK,
+            'disease' => $validated['disease'],
+            'diagnosis' => $validated['diagnosis'],
+            'prescription' => $validated['prescription'],
+            'doctor_notes' => $validated['doctor_notes'] ?? null,
+            'status' => Queue::STATUS_MENUNGGU_APOTEK,
             'doctor_finished_at' => Carbon::now(),
+            'expired_at' => Carbon::now()->addHours(24), // Auto-expire 24 jam jika obat tak kunjung diambil di apotek
             'needs_prescription_revision' => false,
             'prescription_replacement_reason' => null,
         ]);
@@ -179,7 +199,7 @@ class DokterController extends Controller
     {
         $doctor = Auth::user();
 
-        if ($queue->status !== Queue::STATUS_MENUNGGU_APOTEK || !$queue->needs_prescription_revision) {
+        if ($queue->status !== Queue::STATUS_MENUNGGU_APOTEK || ! $queue->needs_prescription_revision) {
             return back()->with('error', "Antrian {$queue->queue_code} tidak dalam status membutuhkan peresepan ulang.");
         }
 
@@ -191,10 +211,10 @@ class DokterController extends Controller
         ]);
 
         $queue->update([
-            'prescription'                => $validated['prescription'],
-            'doctor_notes'                => $validated['doctor_notes'] ?? $queue->doctor_notes,
+            'prescription' => $validated['prescription'],
+            'doctor_notes' => $validated['doctor_notes'] ?? $queue->doctor_notes,
             'needs_prescription_revision' => false, // Reset flag pengajuan
-            'doctor_finished_at'          => Carbon::now(), // Update waktu peresepan terbaru
+            'doctor_finished_at' => Carbon::now(), // Update waktu peresepan terbaru
         ]);
 
         return redirect()->route('dokter.dashboard')
@@ -210,25 +230,25 @@ class DokterController extends Controller
     {
         $doctor = Auth::user();
 
-        if (!in_array($queue->status, [Queue::STATUS_MENUNGGU_DOKTER, Queue::STATUS_MENUNGGU_SUSTER, Queue::STATUS_PEMERIKSAAN_DOKTER])) {
+        if (! in_array($queue->status, [Queue::STATUS_MENUNGGU_DOKTER, Queue::STATUS_MENUNGGU_SUSTER, Queue::STATUS_PEMERIKSAAN_DOKTER])) {
             return back()->with('error', "Antrian {$queue->queue_code} tidak dapat dipindah poli karena statusnya sudah {$queue->status_label}.");
         }
 
         $validated = $request->validate([
             'target_polyclinic_id' => ['required', 'exists:polyclinics,id', 'different:polyclinic_id'],
         ], [
-            'target_polyclinic_id.required'  => 'Pilih poli tujuan terlebih dahulu.',
+            'target_polyclinic_id.required' => 'Pilih poli tujuan terlebih dahulu.',
             'target_polyclinic_id.different' => 'Poli tujuan harus berbeda dari poli saat ini.',
         ]);
 
         $targetPoli = Polyclinic::findOrFail($validated['target_polyclinic_id']);
 
         // Cek ada dokter di poli tujuan
-        $targetDoctor = \App\Models\User::where('role', 'dokter')
+        $targetDoctor = User::where('role', 'dokter')
             ->where('polyclinic_id', $targetPoli->id)
             ->first();
 
-        if (!$targetDoctor) {
+        if (! $targetDoctor) {
             return back()->with('error', "Pindah poli GAGAL: Tidak ada dokter yang bertugas di {$targetPoli->name}. Pilih poli lain yang memiliki dokter aktif.");
         }
 
@@ -238,30 +258,75 @@ class DokterController extends Controller
             ->where('polyclinic_id', $targetPoli->id)
             ->max('queue_number');
         $newQueueNumber = ($lastQueue ?? 0) + 1;
-        $newQueueCode   = $targetPoli->code . '-' . str_pad($newQueueNumber, 3, '0', STR_PAD_LEFT);
+        $newQueueCode = $targetPoli->code.'-'.str_pad($newQueueNumber, 3, '0', STR_PAD_LEFT);
 
         // Buat antrian baru di poli tujuan
         $newQueue = Queue::create([
-            'queue_code'    => $newQueueCode,
-            'queue_number'  => $newQueueNumber,
-            'queue_date'    => $today,
-            'patient_id'    => $queue->patient_id,
+            'queue_code' => $newQueueCode,
+            'queue_number' => $newQueueNumber,
+            'queue_date' => $today,
+            'patient_id' => $queue->patient_id,
             'polyclinic_id' => $targetPoli->id,
-            'doctor_id'     => $targetDoctor->id,
-            'status'        => Queue::STATUS_MENUNGGU_DOKTER,
-            'complaint'     => $queue->complaint,
+            'doctor_id' => $targetDoctor->id,
+            'status' => Queue::STATUS_MENUNGGU_DOKTER,
+            'complaint' => $queue->complaint,
             'nurse_verified_at' => Carbon::now(),
         ]);
 
         // Tandai antrian lama sebagai sudah dipindah (cancelled by doctor)
         $queue->update([
-            'status'        => Queue::STATUS_DILEWATI,
-            'doctor_notes'  => "[DIPINDAH DOKTER {$doctor->name} ke {$targetPoli->name} - Antrian Baru: {$newQueueCode}]",
-            'skipped_at'    => Carbon::now(),
-            'expired_at'    => Carbon::now(), // langsung expire
+            'status' => Queue::STATUS_DILEWATI,
+            'doctor_notes' => "[DIPINDAH DOKTER {$doctor->name} ke {$targetPoli->name} - Antrian Baru: {$newQueueCode}]",
+            'skipped_at' => Carbon::now(),
+            'expired_at' => Carbon::now(), // langsung expire
         ]);
 
         return redirect()->route('dokter.dashboard')
             ->with('success', "Pasien {$queue->patient->name} BERHASIL dipindah ke {$targetPoli->name}! Antrian baru: {$newQueueCode} (Dokter: {$targetDoctor->name}).");
+    }
+
+    /**
+     * Dokter Melewati Antrian Pasien yang Tidak Kunjung Datang ke Ruang Pemeriksaan
+     * Status: menunggu_dokter -> dilewati (Auto-expire 24 jam)
+     */
+    public function skipQueue(Queue $queue): RedirectResponse
+    {
+        if (in_array($queue->status, [Queue::STATUS_SELESAI, Queue::STATUS_DILEWATI])) {
+            return back()->with('error', "Antrian {$queue->queue_code} tidak dapat dilewati.");
+        }
+
+        $queue->update([
+            'status' => Queue::STATUS_DILEWATI,
+            'skipped_at' => Carbon::now(),
+            'skip_count' => $queue->skip_count + 1,
+            'expired_at' => Carbon::now()->addHours(24), // Auto-expire 24 jam
+        ]);
+
+        return redirect()->route('dokter.dashboard')->with('warning', "Antrian {$queue->queue_code} ({$queue->patient->name}) telah DILEWATI oleh Dokter. Pasien dapat dipanggil ulang dalam 24 jam ke depan sebelum hangus otomatis.");
+    }
+
+    /**
+     * Dokter Memanggil Ulang Pasien yang Sempat Dilewati
+     * Status: dilewati -> menunggu_dokter
+     */
+    public function recallQueue(Queue $queue): RedirectResponse
+    {
+        if ($queue->status !== Queue::STATUS_DILEWATI) {
+            return back()->with('error', "Antrian {$queue->queue_code} tidak berstatus 'Dilewati'.");
+        }
+
+        // Cek apakah sudah expired (> 24 jam)
+        if ($queue->expired_at && Carbon::now()->isAfter($queue->expired_at)) {
+            $queue->delete();
+
+            return back()->with('error', "Antrian {$queue->queue_code} sudah kadaluarsa/hangus (lebih dari 24 jam). Pasien harus mengambil nomor antrian baru.");
+        }
+
+        $queue->update([
+            'status' => Queue::STATUS_MENUNGGU_DOKTER,
+            'skipped_at' => null,
+        ]);
+
+        return back()->with('success', "Antrian {$queue->queue_code} ({$queue->patient->name}) berhasil DIPANGGIL ULANG! Pasien kembali ke antrian aktif menunggu pemeriksaan.");
     }
 }

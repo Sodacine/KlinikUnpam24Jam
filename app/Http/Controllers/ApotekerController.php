@@ -15,19 +15,34 @@ class ApotekerController extends Controller
      */
     public function dashboard(): View
     {
+        // Bersihkan antrian yang sudah kadaluarsa (>24 jam)
+        Queue::autoExpireOutdatedQueues();
+
         $today = Carbon::today();
 
         // 1. Pasien yang menunggu verifikasi & peracikan resep dokter
         $pendingPrescriptions = Queue::with(['patient', 'polyclinic', 'doctor'])
-            ->whereDate('queue_date', $today)
             ->where('status', Queue::STATUS_MENUNGGU_APOTEK)
+            ->where(function ($query) use ($today) {
+                $query->whereDate('queue_date', $today)
+                    ->orWhere(function ($sub) {
+                        $sub->whereNotNull('expired_at')
+                            ->where('expired_at', '>', now());
+                    });
+            })
             ->orderBy('doctor_finished_at')
             ->get();
 
         // 2. Pasien yang resepnya sudah siap dan dipanggil menuju loket apotek
         $readyToPickup = Queue::with(['patient', 'polyclinic', 'doctor'])
-            ->whereDate('queue_date', $today)
             ->where('status', Queue::STATUS_SIAP_DIAMBIL)
+            ->where(function ($query) use ($today) {
+                $query->whereDate('queue_date', $today)
+                    ->orWhere(function ($sub) {
+                        $sub->whereNotNull('expired_at')
+                            ->where('expired_at', '>', now());
+                    });
+            })
             ->orderBy('pharmacist_verified_at')
             ->get();
 
@@ -39,10 +54,25 @@ class ApotekerController extends Controller
             ->limit(10)
             ->get();
 
+        // 4. Pasien yang dilewati apotek karena tak kunjung mengambil obat (bisa dipanggil ulang selama 24 jam)
+        $skippedPrescriptions = Queue::with(['patient', 'polyclinic', 'doctor'])
+            ->where('status', Queue::STATUS_DILEWATI)
+            ->whereNotNull('doctor_finished_at')
+            ->where(function ($query) use ($today) {
+                $query->whereDate('queue_date', $today)
+                    ->orWhere(function ($sub) {
+                        $sub->whereNotNull('expired_at')
+                            ->where('expired_at', '>', now());
+                    });
+            })
+            ->latest('skipped_at')
+            ->get();
+
         // Statistik Cepat Apotek
         $stats = [
-            'pending'   => $pendingPrescriptions->count(),
-            'ready'     => $readyToPickup->count(),
+            'pending' => $pendingPrescriptions->count(),
+            'ready' => $readyToPickup->count(),
+            'skipped' => $skippedPrescriptions->count(),
             'completed' => Queue::whereDate('queue_date', $today)->where('status', Queue::STATUS_SELESAI)->count(),
         ];
 
@@ -50,6 +80,7 @@ class ApotekerController extends Controller
             'pendingPrescriptions',
             'readyToPickup',
             'completedToday',
+            'skippedPrescriptions',
             'stats'
         ));
     }
@@ -70,9 +101,10 @@ class ApotekerController extends Controller
         ]);
 
         $queue->update([
-            'status'                 => Queue::STATUS_SIAP_DIAMBIL,
-            'pharmacist_notes'       => $validated['pharmacist_notes'] ?? 'Obat telah disiapkan lengkap sesuai resep dokter. Silakan menuju Loket Apotek.',
+            'status' => Queue::STATUS_SIAP_DIAMBIL,
+            'pharmacist_notes' => $validated['pharmacist_notes'] ?? 'Obat telah disiapkan lengkap sesuai resep dokter. Silakan menuju Loket Apotek.',
             'pharmacist_verified_at' => Carbon::now(),
+            'expired_at' => Carbon::now()->addHours(24), // Auto-expire 24 jam jika obat tak kunjung diambil
         ]);
 
         return back()->with('success', "Resep pasien {$queue->patient->name} ({$queue->queue_code}) BERHASIL diverifikasi! Status berubah menjadi SIAP DIAMBIL. Pasien diarahkan menuju Loket Apotek.");
@@ -95,8 +127,8 @@ class ApotekerController extends Controller
         ]);
 
         $queue->update([
-            'needs_prescription_revision'           => true,
-            'prescription_replacement_reason'       => $validated['prescription_replacement_reason'],
+            'needs_prescription_revision' => true,
+            'prescription_replacement_reason' => $validated['prescription_replacement_reason'],
             'prescription_replacement_requested_at' => Carbon::now(),
         ]);
 
@@ -117,10 +149,57 @@ class ApotekerController extends Controller
         }
 
         $queue->update([
-            'status'       => Queue::STATUS_SELESAI,
+            'status' => Queue::STATUS_SELESAI,
             'completed_at' => Carbon::now(),
         ]);
 
         return back()->with('success', "Obat telah berhasil diserahkan kepada {$queue->patient->name} ({$queue->queue_code})! Seluruh siklus antrian SELESAI dan data resmi tersimpan sebagai Riwayat Medis.");
+    }
+
+    /**
+     * Apoteker Melewati Pasien yang Tak Kunjung Mengambil Obat di Loket
+     * Status: siap_diambil/menunggu_apotek -> dilewati (Auto-expire 24 jam)
+     */
+    public function skipQueue(Queue $queue): RedirectResponse
+    {
+        if (! in_array($queue->status, [Queue::STATUS_SIAP_DIAMBIL, Queue::STATUS_MENUNGGU_APOTEK])) {
+            return back()->with('error', "Antrian {$queue->queue_code} tidak dapat dilewati dari loket apotek.");
+        }
+
+        $queue->update([
+            'status' => Queue::STATUS_DILEWATI,
+            'skipped_at' => Carbon::now(),
+            'skip_count' => $queue->skip_count + 1,
+            'expired_at' => Carbon::now()->addHours(24), // Auto-expire 24 jam
+        ]);
+
+        return back()->with('warning', "Antrian obat {$queue->queue_code} ({$queue->patient->name}) telah DILEWATI karena pasien tak kunjung mengambil obat di loket. Pasien memiliki waktu 24 jam hingga {$queue->expired_at->format('d/m/Y H:i')} WIB sebelum antrian hangus otomatis.");
+    }
+
+    /**
+     * Apoteker Memanggil Ulang Pasien yang Datang Mengambil Obat Setelah Dilewati
+     * Status: dilewati -> siap_diambil
+     */
+    public function recallQueue(Queue $queue): RedirectResponse
+    {
+        if ($queue->status !== Queue::STATUS_DILEWATI) {
+            return back()->with('error', "Antrian {$queue->queue_code} tidak berstatus 'Dilewati'.");
+        }
+
+        // Cek apakah sudah expired (> 24 jam)
+        if ($queue->expired_at && Carbon::now()->isAfter($queue->expired_at)) {
+            $queue->delete();
+
+            return back()->with('error', "Antrian {$queue->queue_code} sudah kadaluarsa/hangus (lebih dari 24 jam). Pasien harus mengambil nomor antrian baru.");
+        }
+
+        $targetStatus = $queue->getPreviousStatusBeforeSkip();
+
+        $queue->update([
+            'status' => $targetStatus,
+            'skipped_at' => null,
+        ]);
+
+        return back()->with('success', "Antrian obat {$queue->queue_code} ({$queue->patient->name}) berhasil DIPANGGIL ULANG ke Loket Apotek!");
     }
 }

@@ -24,6 +24,18 @@
             </div>
 
             <div class="flex items-center gap-3">
+                <form action="{{ route('dokter.antrian.skip', $queue) }}" method="POST" class="inline"
+                      data-confirm="Lewati antrian {{ $queue->queue_code }} ({{ $queue->patient->name }}) karena pasien tak kunjung hadir atau meninggalkan sesi konsultasi? Antrian dapat dipanggil ulang dalam 24 jam sebelum hangus otomatis."
+                      data-confirm-type="warning"
+                      data-confirm-title="Lewati Pasien"
+                      data-confirm-ok="Ya, Lewati">
+                    @csrf
+                    <button type="submit" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 shadow-xs transition-all active:scale-95">
+                        <i data-lucide="skip-forward" class="w-4 h-4 text-rose-600"></i>
+                        Pasien Tak Hadir? Lewati
+                    </button>
+                </form>
+
                 <button type="button" onclick="document.getElementById('modalPindahPoli').classList.remove('hidden')" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-300 shadow-xs transition-all active:scale-95">
                     <i data-lucide="arrow-right-left" class="w-4 h-4 text-amber-600"></i>
                     Salah Poli? Pindahkan Pasien

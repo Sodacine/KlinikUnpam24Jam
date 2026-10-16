@@ -34,8 +34,8 @@
             </div>
         </div>
 
-        <!-- 3 Statistik Farmasi -->
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+        <!-- 4 Statistik Farmasi -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
             <div class="p-5 rounded-3xl bg-purple-50/70 border-2 border-purple-200 shadow-xs flex items-center justify-between">
                 <div>
                     <span class="text-xs font-bold uppercase tracking-wider text-purple-700 block">Resep Menunggu Verifikasi</span>
@@ -55,6 +55,17 @@
                 </div>
                 <div class="w-12 h-12 rounded-2xl bg-teal-200/60 text-teal-700 flex items-center justify-center">
                     <i data-lucide="bell-ring" class="w-6 h-6"></i>
+                </div>
+            </div>
+
+            <div class="p-5 rounded-3xl bg-rose-50/70 border-2 border-rose-200 shadow-xs flex items-center justify-between">
+                <div>
+                    <span class="text-xs font-bold uppercase tracking-wider text-rose-700 block">Dilewati / Tak Hadir</span>
+                    <div class="text-3xl font-black text-rose-950 mt-1">{{ $stats['skipped'] }}</div>
+                    <span class="text-[11px] text-rose-600 font-medium">Hangus dalam 24 jam</span>
+                </div>
+                <div class="w-12 h-12 rounded-2xl bg-rose-200/60 text-rose-700 flex items-center justify-center">
+                    <i data-lucide="user-x" class="w-6 h-6"></i>
                 </div>
             </div>
 
@@ -179,11 +190,29 @@
                                                 </button>
                                             </div>
 
-                                            <button type="submit" class="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-teal-600 hover:bg-teal-700 shadow-md shadow-teal-600/20 transition-all active:scale-95">
-                                                <i data-lucide="check-check" class="w-4 h-4"></i>
-                                                Verifikasi Resep & Panggil ke Loket Apotek &raquo;
-                                            </button>
+                                            <div class="flex items-center gap-2">
+                                                <button type="button" onclick="document.getElementById('formSkipResep{{ $queue->id }}').submit()"
+                                                        title="Lewati jika pasien tak kunjung hadir ke apotek (Hangus dalam 24 Jam)"
+                                                        class="inline-flex items-center gap-1 px-3 py-2.5 rounded-xl text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition-colors">
+                                                    <i data-lucide="skip-forward" class="w-3.5 h-3.5"></i>
+                                                    Lewati
+                                                </button>
+
+                                                <button type="submit" class="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-teal-600 hover:bg-teal-700 shadow-md shadow-teal-600/20 transition-all active:scale-95">
+                                                    <i data-lucide="check-check" class="w-4 h-4"></i>
+                                                    Verifikasi Resep &amp; Panggil ke Loket Apotek &raquo;
+                                                </button>
+                                            </div>
                                         </div>
+                                    </form>
+
+                                    <!-- Form Lewati untuk Resep yang Tak Kunjung Diambil -->
+                                    <form id="formSkipResep{{ $queue->id }}" action="{{ route('apoteker.antrian.skip', $queue) }}" method="POST" class="hidden"
+                                          data-confirm="Lewati antrian {{ $queue->queue_code }} ({{ $queue->patient->name }}) karena tak kunjung hadir ke Apotek? Antrian dapat dipanggil ulang dalam 24 jam sebelum hangus otomatis."
+                                          data-confirm-type="warning"
+                                          data-confirm-title="Lewati Pasien Belum Hadir"
+                                          data-confirm-ok="Ya, Lewati">
+                                        @csrf
                                     </form>
 
                                 </div>
@@ -243,7 +272,7 @@
                                         </div>
                                     </div>
 
-                                    <form id="formSerahkan{{ $ready->id }}" action="{{ route('apoteker.antrian.serahkan-obat', $ready) }}" method="POST">
+                                     <form id="formSerahkan{{ $ready->id }}" action="{{ route('apoteker.antrian.serahkan-obat', $ready) }}" method="POST">
                                         @csrf
                                         <button type="button"
                                                 data-btn-confirm="Konfirmasi bahwa obat telah diserahkan kepada {{ $ready->patient->name }}. Siklus antrian akan selesai dan masuk ke Riwayat Medis."
@@ -257,6 +286,22 @@
                                         </button>
                                     </form>
 
+                                    <!-- Tombol Lewati jika Pasien Tak Kunjung Datang Mengambil Obat -->
+                                    <div class="mt-2.5 pt-2.5 border-t border-teal-100">
+                                        <form action="{{ route('apoteker.antrian.skip', $ready) }}" method="POST"
+                                              data-confirm="Lewati antrian {{ $ready->queue_code }} ({{ $ready->patient->name }}) karena tak kunjung mengambil obat? Antrian dapat dipanggil ulang dalam 24 jam sebelum hangus otomatis."
+                                              data-confirm-type="warning"
+                                              data-confirm-title="Lewati Pasien Belum Ambil Obat"
+                                              data-confirm-ok="Ya, Lewati">
+                                            @csrf
+                                            <button type="submit" title="Lewati jika pasien tak kunjung datang ke loket (Hangus dalam 24 Jam)"
+                                                    class="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-xl text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition-colors">
+                                                <i data-lucide="skip-forward" class="w-3.5 h-3.5"></i>
+                                                Lewati – Pasien Tak Kunjung Datang
+                                            </button>
+                                        </form>
+                                    </div>
+
                                 </div>
                             @endforeach
                         </div>
@@ -265,6 +310,92 @@
             </div>
 
         </div>
+
+        <!-- ======================================================== -->
+        <!-- BAGIAN: ANTRIAN OBAT DILEWATI / BELUM DIAMBIL PASIEN     -->
+        <!-- ======================================================== -->
+        @if($skippedPrescriptions->isNotEmpty())
+            <div class="bg-white rounded-3xl border border-rose-200/80 shadow-md shadow-rose-200/20 overflow-hidden mb-8">
+                <div class="px-6 py-4 border-b border-rose-100 bg-rose-50/50 flex flex-wrap items-center justify-between gap-3">
+                    <div class="flex items-center gap-2">
+                        <div class="w-8 h-8 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center">
+                            <i data-lucide="user-x" class="w-4 h-4"></i>
+                        </div>
+                        <div>
+                            <h2 class="text-base font-bold text-slate-900">Antrian Obat Dilewati (Tak Kunjung Diambil)</h2>
+                            <p class="text-xs text-slate-500">Pasien yang belum datang ke loket apotek. Antrian otomatis hangus dalam 24 jam jika tidak kunjung diambil.</p>
+                        </div>
+                    </div>
+                    <span class="text-xs font-bold text-rose-800 bg-rose-100 px-3 py-1 rounded-full border border-rose-200">
+                        {{ $skippedPrescriptions->count() }} Antrian Dilewati
+                    </span>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse text-xs">
+                        <thead>
+                            <tr class="bg-rose-50/30 border-b border-rose-100 text-slate-400 font-bold uppercase tracking-wider">
+                                <th class="py-3.5 px-4 text-center">No</th>
+                                <th class="py-3.5 px-4">Kode Tiket</th>
+                                <th class="py-3.5 px-4">Pasien</th>
+                                <th class="py-3.5 px-4">Poli & Dokter</th>
+                                <th class="py-3.5 px-4">Resep Obat</th>
+                                <th class="py-3.5 px-4">Waktu Dilewati</th>
+                                <th class="py-3.5 px-4">Batas Waktu Hangus</th>
+                                <th class="py-3.5 px-4 text-right">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            @foreach($skippedPrescriptions as $sq)
+                                <tr class="hover:bg-rose-50/30 transition-colors">
+                                    <td class="py-3.5 px-4 text-center font-bold text-slate-400">
+                                        #{{ $sq->queue_number }}
+                                    </td>
+                                    <td class="py-3.5 px-4 whitespace-nowrap">
+                                        <span class="font-mono text-sm font-bold text-slate-900">{{ $sq->queue_code }}</span>
+                                    </td>
+                                    <td class="py-3.5 px-4">
+                                        <div class="font-bold text-slate-900">{{ $sq->patient->name }}</div>
+                                        <span class="text-slate-400 text-[11px]">
+                                            {{ $sq->patient->gender === 'L' ? 'Laki-laki' : 'Perempuan' }} &bull; NIK: {{ $sq->patient->nik ?? '-' }}
+                                        </span>
+                                    </td>
+                                    <td class="py-3.5 px-4 whitespace-nowrap">
+                                        <span class="font-semibold text-slate-800 block">{{ $sq->polyclinic->name }}</span>
+                                        <span class="text-slate-400 text-[11px]">{{ $sq->doctor?->name }}</span>
+                                    </td>
+                                    <td class="py-3.5 px-4 font-mono text-[11px] text-slate-700 max-w-xs whitespace-pre-line line-clamp-2">
+                                        {{ $sq->prescription }}
+                                    </td>
+                                    <td class="py-3.5 px-4 whitespace-nowrap text-slate-500">
+                                        {{ $sq->skipped_at?->format('H:i, d/m') ?? '-' }}
+                                    </td>
+                                    <td class="py-3.5 px-4 whitespace-nowrap">
+                                        @if($sq->expired_at && now()->isBefore($sq->expired_at))
+                                            <span class="inline-flex items-center gap-1 font-semibold text-rose-600 bg-rose-50 px-2.5 py-1 rounded-lg border border-rose-200">
+                                                <i data-lucide="clock" class="w-3 h-3"></i>
+                                                Hangus {{ $sq->expired_at->diffForHumans() }}
+                                            </span>
+                                        @else
+                                            <span class="text-slate-400 italic">Kadaluarsa</span>
+                                        @endif
+                                    </td>
+                                    <td class="py-3.5 px-4 text-right whitespace-nowrap">
+                                        <form action="{{ route('apoteker.antrian.recall', $sq) }}" method="POST" class="inline">
+                                            @csrf
+                                            <button type="submit" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-amber-500 hover:bg-amber-600 shadow-sm transition-all active:scale-95">
+                                                <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+                                                Panggil Ulang Pasien
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        @endif
 
         <!-- ========================================== -->
         <!-- BAGIAN 3: OBAT SELESAI DISERAHKAN HARI INI -->

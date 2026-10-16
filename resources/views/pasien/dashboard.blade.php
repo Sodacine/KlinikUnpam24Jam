@@ -115,6 +115,40 @@
                     </div>
                 </div>
 
+                @if($activeQueue->status === \App\Models\Queue::STATUS_DILEWATI)
+                    <!-- Peringatan Antrian Dilewati & Countdown Hangus 24 Jam -->
+                    <div class="my-4 p-4 rounded-2xl bg-gradient-to-r from-rose-50 via-amber-50 to-rose-50 border-2 border-rose-300 text-rose-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
+                        <div class="flex items-start gap-3">
+                            <div class="p-2.5 rounded-xl bg-rose-200/80 text-rose-800 shrink-0 mt-0.5 animate-pulse">
+                                <i data-lucide="alert-triangle" class="w-5 h-5"></i>
+                            </div>
+                            <div>
+                                <h4 class="text-sm font-black text-rose-950">Antrian Anda Sementara Dilewati</h4>
+                                <p class="text-xs text-rose-900 mt-0.5 leading-relaxed">
+                                    Petugas telah memanggil nomor antrian Anda, namun Anda belum hadir di lokasi. Silakan segera temui petugas klinik untuk dipanggil ulang.
+                                </p>
+                                @if($activeQueue->expired_at)
+                                    <div class="inline-flex items-center gap-1.5 mt-2 px-3 py-1 rounded-lg bg-white/80 border border-rose-300 text-rose-700 font-bold text-xs">
+                                        <i data-lucide="clock" class="w-3.5 h-3.5 text-rose-600"></i>
+                                        Batas Waktu Hangus Otomatis: {{ $activeQueue->expired_at->format('H:i, d M Y') }} ({{ $activeQueue->expired_at->diffForHumans() }})
+                                    </div>
+                                @endif
+                            </div>
+                        </div>
+                    </div>
+                @elseif($activeQueue->expired_at && now()->isBefore($activeQueue->expired_at))
+                    <!-- Info Batas Hangus 24 Jam Pasien Aktif -->
+                    <div class="my-3 px-4 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-600 flex items-center justify-between text-xs">
+                        <span class="flex items-center gap-1.5 font-medium">
+                            <i data-lucide="clock" class="w-4 h-4 text-slate-400"></i>
+                            Masa aktif tiket antrian (hangus dalam 24 jam jika tidak hadir):
+                        </span>
+                        <span class="font-bold text-slate-800 font-mono">
+                            {{ $activeQueue->expired_at->format('H:i, d M Y') }} ({{ $activeQueue->expired_at->diffForHumans() }})
+                        </span>
+                    </div>
+                @endif
+
                 <!-- Nomor Antrian & Detail Poli -->
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 py-6 items-center">
                     
@@ -416,12 +450,18 @@
     // Live Auto Polling untuk status antrian pasien
     const queueId = {{ $activeQueue->id }};
     let currentStep = {{ $activeQueue->status_step }};
+    let currentStatus = '{{ $activeQueue->status }}';
 
     function pollQueueStatus() {
         fetch(`/pasien/antrian/status/${queueId}`)
             .then(res => res.json())
             .then(data => {
                 if (data.error) return;
+
+                if (data.is_expired) {
+                    window.location.reload();
+                    return;
+                }
 
                 document.getElementById('liveTimestamp').innerText = 'Terakhir dicek: ' + new Date().toLocaleTimeString('id-ID');
                 document.getElementById('instructionDisplay').innerText = data.instruction;
@@ -431,8 +471,8 @@
                     document.getElementById('doctorNameDisplay').innerHTML = `<i data-lucide="stethoscope" class="w-4 h-4 text-slate-400"></i> ${data.doctor_name}`;
                 }
 
-                // Cek jika status berubah
-                if (data.status_step !== currentStep) {
+                // Cek jika status berubah (misal dilewati atau dipanggil ulang)
+                if (data.status !== currentStatus || data.status_step !== currentStep) {
                     // Bunyikan pemberitahuan suara jika status bergeser ke panggilan dokter atau apotek
                     if (data.status_step === 2 || data.status_step === 5) {
                         if (window.callQueueVoice) {
@@ -440,10 +480,10 @@
                         }
                     }
 
-                    // Reload halaman jika status selesai atau berubah signifikan untuk memperbarui stepper
+                    // Reload halaman jika status berubah untuk memperbarui tampilan
                     setTimeout(() => {
                         window.location.reload();
-                    }, 1500);
+                    }, 1200);
                 }
 
                 lucide.createIcons();

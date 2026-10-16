@@ -104,6 +104,8 @@ Route::middleware('auth')->group(function () {
         Route::post('/antrian/{queue}/selesai-periksa', [DokterController::class, 'submitExamination'])->name('antrian.selesai-periksa');
         Route::post('/antrian/{queue}/resepkan-ulang', [DokterController::class, 'resubmitPrescription'])->name('antrian.resepkan-ulang');
         Route::post('/antrian/{queue}/pindah-poli', [DokterController::class, 'transferPolyclinic'])->name('antrian.pindah-poli');
+        Route::post('/antrian/{queue}/skip', [DokterController::class, 'skipQueue'])->name('antrian.skip');
+        Route::post('/antrian/{queue}/recall', [DokterController::class, 'recallQueue'])->name('antrian.recall');
     });
 
     /*
@@ -116,5 +118,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/antrian/{queue}/verifikasi-resep', [ApotekerController::class, 'verifyPrescription'])->name('antrian.verifikasi-resep');
         Route::post('/antrian/{queue}/ajukan-penggantian-obat', [ApotekerController::class, 'requestPrescriptionReplacement'])->name('antrian.ajukan-penggantian-obat');
         Route::post('/antrian/{queue}/serahkan-obat', [ApotekerController::class, 'completeDispensing'])->name('antrian.serahkan-obat');
+        Route::post('/antrian/{queue}/skip', [ApotekerController::class, 'skipQueue'])->name('antrian.skip');
+        Route::post('/antrian/{queue}/recall', [ApotekerController::class, 'recallQueue'])->name('antrian.recall');
     });
 });

@@ -19,15 +19,16 @@ return new class extends Migration
             $table->foreignId('patient_id')->constrained('users')->cascadeOnDelete();
             $table->foreignId('polyclinic_id')->constrained('polyclinics')->cascadeOnDelete();
             $table->foreignId('doctor_id')->nullable()->constrained('users')->nullOnDelete();
-            
-            // 6 Tahapan State Machine Antrian
+
+            // Tahapan State Machine Antrian
             $table->enum('status', [
                 'menunggu_suster',
                 'menunggu_dokter',
                 'pemeriksaan_dokter',
                 'menunggu_apotek',
                 'siap_diambil',
-                'selesai'
+                'selesai',
+                'dilewati',
             ])->default('menunggu_suster');
 
             // Data Medis (Diisi Pasien & Dokter)

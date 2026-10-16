@@ -14,6 +14,14 @@ class User extends Authenticatable
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
 
+    public const ROLE_PASIEN = 'pasien';
+
+    public const ROLE_SUSTER = 'suster';
+
+    public const ROLE_DOKTER = 'dokter';
+
+    public const ROLE_APOTEKER = 'apoteker';
+
     protected $fillable = [
         'name',
         'email',

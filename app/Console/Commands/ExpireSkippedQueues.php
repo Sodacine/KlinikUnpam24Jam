@@ -21,7 +21,7 @@ class ExpireSkippedQueues extends Command
      *
      * @var string
      */
-    protected $description = 'Hapus otomatis antrian berstatus "dilewati" yang sudah melewati 24 jam (expired_at)';
+    protected $description = 'Hapus otomatis antrian yang tidak kunjung datang ke dokter atau apotek setelah melewati batas waktu 24 jam';
 
     /**
      * Execute the console command.
@@ -30,13 +30,15 @@ class ExpireSkippedQueues extends Command
     {
         $now = Carbon::now();
 
-        // Cari antrian dilewati yang sudah expire
-        $expiredQueues = Queue::where('status', Queue::STATUS_DILEWATI)
+        // Cari antrian dilewati atau antrian aktif belum selesai yang sudah melewati 24 jam
+        $expiredQueues = Queue::where('status', '!=', Queue::STATUS_SELESAI)
+            ->whereNotNull('expired_at')
             ->where('expired_at', '<=', $now)
             ->get();
 
         if ($expiredQueues->isEmpty()) {
-            $this->info('Tidak ada antrian dilewati yang perlu di-expire.');
+            $this->info('Tidak ada antrian kadaluarsa (>24 jam) yang perlu dihapus.');
+
             return self::SUCCESS;
         }
 
@@ -45,6 +47,7 @@ class ExpireSkippedQueues extends Command
             foreach ($expiredQueues as $q) {
                 $this->line("  - {$q->queue_code} | {$q->patient->name} | Expired: {$q->expired_at}");
             }
+
             return self::SUCCESS;
         }
 

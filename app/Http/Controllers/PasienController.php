@@ -21,6 +21,9 @@ class PasienController extends Controller
      */
     public function dashboard(): View
     {
+        // Bersihkan antrian yang sudah kadaluarsa (>24 jam)
+        Queue::autoExpireOutdatedQueues();
+
         $user = Auth::user();
 
         // 4 Poliklinik resmi klinik Unpam 24 Jam
@@ -66,6 +69,9 @@ class PasienController extends Controller
      */
     public function storeQueue(Request $request): RedirectResponse
     {
+        // Bersihkan antrian yang sudah kadaluarsa (>24 jam)
+        Queue::autoExpireOutdatedQueues();
+
         $user = Auth::user();
 
         // Cek apakah pasien sudah punya antrian aktif hari ini yang belum selesai
@@ -73,6 +79,12 @@ class PasienController extends Controller
             ->whereDate('queue_date', Carbon::today())
             ->where('status', '!=', Queue::STATUS_SELESAI)
             ->first();
+
+        // Jika antrian lama sudah expired (>24 jam), bersihkan otomatis
+        if ($existingQueue && $existingQueue->is_expired) {
+            $existingQueue->delete();
+            $existingQueue = null;
+        }
 
         if ($existingQueue) {
             return back()->with('error', "Anda masih memiliki antrian aktif ({$existingQueue->queue_code}) di {$existingQueue->polyclinic->name}. Selesaikan terlebih dahulu sebelum membuat antrian baru.");
@@ -145,6 +157,17 @@ class PasienController extends Controller
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
+        if ($queue->is_expired) {
+            $queue->delete();
+
+            return response()->json([
+                'id' => null,
+                'is_expired' => true,
+                'is_finished' => true,
+                'instruction' => 'Antrian Anda telah hangus karena melewati batas waktu 24 jam.',
+            ]);
+        }
+
         $queue->load(['polyclinic', 'doctor']);
 
         $waitingCountAhead = Queue::where('polyclinic_id', $queue->polyclinic_id)
@@ -166,6 +189,9 @@ class PasienController extends Controller
             'doctor_name' => $queue->doctor?->name,
             'waiting_ahead' => $waitingCountAhead,
             'is_finished' => $queue->status === Queue::STATUS_SELESAI,
+            'is_expired' => false,
+            'is_skipped' => $queue->status === Queue::STATUS_DILEWATI,
+            'expired_at' => $queue->expired_at?->format('H:i, d/m/Y'),
         ]);
     }
 
